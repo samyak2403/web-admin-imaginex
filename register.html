@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register Admin - ImagineX</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-box">
+            <div class="login-header">
+                <h1>Create Admin Account</h1>
+                <p>Register a new admin for ImagineX</p>
+            </div>
+            
+            <form id="registerForm">
+                <div class="form-group">
+                    <label for="name">Full Name</label>
+                    <input type="text" id="name" placeholder="Enter your name" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" placeholder="admin@imaginex.com" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" placeholder="Min 6 characters" minlength="6" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="confirmPassword">Confirm Password</label>
+                    <input type="password" id="confirmPassword" placeholder="Confirm password" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="adminCode">Admin Code</label>
+                    <input type="text" id="adminCode" placeholder="Enter admin registration code" required>
+                    <small style="color: #666; font-size: 12px;">Contact super admin for the code</small>
+                </div>
+                
+                <button type="submit" class="btn btn-primary btn-full" id="registerBtn">
+                    Create Account
+                </button>
+            </form>
+            
+            <div id="message" class="error-message"></div>
+            
+            <div style="text-align: center; margin-top: 20px;">
+                <a href="index.html" style="color: #667eea; text-decoration: none;">
+                    Already have an account? Sign In
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+    
+    <script src="js/config.js"></script>
+    <script>
+        // Admin registration code (change this to your secret code)
+        const ADMIN_REGISTRATION_CODE = 'IMAGINEX2024';
+        
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const name = document.getElementById('name').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            const adminCode = document.getElementById('adminCode').value.trim();
+            const messageDiv = document.getElementById('message');
+            const registerBtn = document.getElementById('registerBtn');
+            
+            // Clear previous messages
+            messageDiv.textContent = '';
+            messageDiv.style.color = '#e74c3c';
+            
+            // Validate passwords match
+            if (password !== confirmPassword) {
+                messageDiv.textContent = 'Passwords do not match';
+                return;
+            }
+            
+            // Validate admin code
+            if (adminCode !== ADMIN_REGISTRATION_CODE) {
+                messageDiv.textContent = 'Invalid admin registration code';
+                return;
+            }
+            
+            // Disable button
+            registerBtn.disabled = true;
+            registerBtn.textContent = 'Creating Account...';
+            
+            try {
+                // Create user in Firebase Auth
+                const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+                const user = userCredential.user;
+                
+                // Update display name
+                await user.updateProfile({ displayName: name });
+                
+                // Save admin data to Firestore
+                await db.collection('admins').doc(user.uid).set({
+                    name: name,
+                    email: email,
+                    role: 'admin',
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                // Also add to users collection
+                await db.collection('users').doc(user.uid).set({
+                    name: name,
+                    email: email,
+                    role: 'Admin',
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                // Show success message
+                messageDiv.style.color = '#27ae60';
+                messageDiv.textContent = 'Account created successfully! Redirecting...';
+                
+                // Add email to ADMIN_EMAILS (note: this only works for current session)
+                if (!ADMIN_EMAILS.includes(email)) {
+                    ADMIN_EMAILS.push(email);
+                }
+                
+                // Redirect to login
+                setTimeout(() => {
+                    window.location.href = 'index.html';
+                }, 2000);
+                
+            } catch (error) {
+                registerBtn.disabled = false;
+                registerBtn.textContent = 'Create Account';
+                
+                // Handle errors
+                switch (error.code) {
+                    case 'auth/email-already-in-use':
+                        messageDiv.textContent = 'This email is already registered';
+                        break;
+                    case 'auth/invalid-email':
+                        messageDiv.textContent = 'Invalid email address';
+                        break;
+                    case 'auth/weak-password':
+                        messageDiv.textContent = 'Password is too weak';
+                        break;
+                    default:
+                        messageDiv.textContent = error.message;
+                }
+            }
+        });
+    </script>
+</body>
+</html>
